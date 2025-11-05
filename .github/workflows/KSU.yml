@@ -412,19 +412,6 @@ jobs:
           # 使用原版KernelSU的setup.sh脚本，默认拉取main分支
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
           cd KernelSU
-          # 尝试获取原版KernelSU的版本号
-          # 方法1：通过GitHub API获取最新的发布版标签
-          LATEST_TAG=$(curl -s https://api.github.com/repos/tiann/KernelSU/releases/latest | grep -oP '"tag_name": "\K[^"]*')
-          if [ -n "$LATEST_TAG" ]; then
-            KSU_VERSION="$LATEST_TAG"
-            echo "使用最新发布版本: $KSU_VERSION"
-          else
-            # 方法2：如果API获取失败，使用一个已知的近期版本号作为后备，例如v1.0.5
-            KSU_VERSION="v1.0.5"
-            echo "API获取失败，使用默认版本: $KSU_VERSION"
-          fi
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          echo "原版KernelSU版本: $KSU_VERSION"
 
       - name: Apply Patches KernelSU
         run: |
@@ -434,12 +421,16 @@ jobs:
           cd kernel_platform
           echo "正在拉取susfs补丁"
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
-          cp ../kernel_patches/next/scope_min_manual_hooks_v1.5.patch ./common/
-          cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./common
+          cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-          cd ./common
+          export KERNEL_REPO=$(pwd)
+          cd ./KernelSU
+          patch -p1 < 10_enable_susfs_for_ksu.patch
+          cd $KERNEL_REPO/
+
+          cd ./KernelSU
           GKI_V="${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}"
           SUBLEVEL=$(grep '^SUBLEVEL *=' Makefile | head -n1 | cut -d= -f2 | tr -d ' ')
           KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
@@ -463,11 +454,8 @@ jobs:
           fi
 
           echo "正在打susfs补丁"
-          patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
           patch -p1 < 50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
           echo "susfs_patch完成"
-
-          patch -p1 --fuzz=3 < scope_min_manual_hooks_v1.5.patch
 
           # Revert
           if [ "$fake_patched" = 1 ]; then
@@ -493,13 +481,17 @@ jobs:
           CONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
           KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_HAVE_KPROBES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBE_EVENTS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_KPROBES_HOOK=n" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=n" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=n" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n" >> "$CONFIG_FILE"
@@ -507,9 +499,10 @@ jobs:
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=n" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
 
           # TMPFS配置*
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
