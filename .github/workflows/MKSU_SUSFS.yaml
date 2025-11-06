@@ -309,30 +309,6 @@ jobs:
             echo "TKERNEL_VERSION=$ORIG_VERSION" >> $GITHUB_ENV
           fi
 
-      # 新增 SUSFS 补丁步骤
-      - name: Add SUSFS Support with Patches
-        if: ${{ github.event.inputs.SUSFS == 'true' }}
-        run: |
-          cd kernel_workspace
-          echo "正在添加 SUSFS 文件系统支持..."
-          
-          # 克隆 SUSFS 仓库
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 susfs_temp
-          
-          # 复制所有补丁文件
-          cp -r susfs_temp/kernel_patches/fs/* kernel_platform/common/fs/ 2>/dev/null || true
-          cp -r susfs_temp/kernel_patches/include/linux/* kernel_platform/common/include/linux/ 2>/dev/null || true
-          cp susfs_temp/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch kernel_platform/KernelSU/ 2>/dev/null || true
-          cp susfs_temp/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch kernel_platform/common/ 2>/dev/null || true
-          
-          # 应用补丁
-          cd kernel_platform/KernelSU && patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          cd ../common && patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
-          cd ../..
-          
-          rm -rf susfs_temp
-          echo "✅ SUSFS 补丁应用完成"
-          
       # 自定义内核后缀
       - name: Custom Kernel Suffix if set
         if: ${{ github.event.inputs.SUFFIX != '' }}
@@ -438,19 +414,11 @@ jobs:
           cd kernel_workspace/kernel_platform
           curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/refs/heads/main/kernel/setup.sh" | bash -
 
-      - name: Apply Patches SukiSU Ultra
+      - name: Apply Patches
         env:
           FILE: ${{ github.event.inputs.FILE }}
         run: |
           cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
-          git clone https://github.com/ShirkNeko/SukiSU_patch.git
-          cd kernel_platform
-          echo "正在拉取susfs补丁"
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
-          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-
           cd ./common
           GKI_V="${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}"
           SUBLEVEL=$(grep '^SUBLEVEL *=' Makefile | head -n1 | cut -d= -f2 | tr -d ' ')
@@ -470,10 +438,6 @@ jobs:
             fi
           fi
 
-          echo "正在打susfs补丁"
-          patch -p1 < 50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
-          echo "susfs_patch完成"
-
           # Revert
           if [ "$fake_patched" = 1 ]; then
             if [ "$GKI_V" = "android12-5.10" ] || [ "$GKI_V" = "android13-5.15" ]; then
@@ -482,7 +446,49 @@ jobs:
               fi
             fi
           fi
-
+      - name: Add SUSFS Support with Patches
+        if: ${{ github.event.inputs.SUSFS == 'true' }}
+        run: |
+          cd kernel_workspace
+          echo "正在添加 SUSFS 文件系统支持..."
+    
+          # 克隆 SUSFS 仓库
+          echo "克隆 SUSFS 源码..."
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 susfs_src
+          echo "克隆补丁文件..."
+          git clone https://github.com/liqideqq/kernel_patches.git susfs_patches
+          
+          # 复制所有补丁文件
+          echo "复制 SUSFS 文件..."
+          cp -r susfs_src/kernel_patches/fs/* kernel_platform/common/fs/ 2>/dev/null || true
+          cp -r susfs_src/kernel_patches/include/linux/* kernel_platform/common/include/linux/ 2>/dev/null || true
+          cp susfs_patches/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch kernel_platform/KernelSU/ 2>/dev/null || true
+          cp susfs_patches/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch kernel_platform/common/ 2>/dev/null || true
+          cp susfs_patches/kernel_patches/mksu/mksu_susfs.patch kernel_platform/common/ 2>/dev/null || true
+          cp susfs_patches/kernel_patches/mksu/fix.patch kernel_platform/common/ 2>/dev/null || true
+    
+          # 应用补丁（添加文件存在性检查）
+          echo "应用 SUSFS 补丁..."
+    
+          if [[ -f "kernel_platform/KernelSU/10_enable_susfs_for_ksu.patch" ]]; then
+              cd kernel_platform/KernelSU && patch -p1 < 10_enable_susfs_for_ksu.patch && echo "✅ 10_enable_susfs_for_ksu.patch 应用成功" || echo "⚠️ 10_enable_susfs_for_ksu.patch 应用失败"
+              cd ../common
+          else
+              cd kernel_platform/common
+              echo "⚠️ 跳过不存在的补丁: 10_enable_susfs_for_ksu.patch"
+          fi
+    
+          {
+              [[ -f "50_add_susfs_in_gki-android12-5.10.patch" ]] && patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch && echo "✅ 50_add_susfs_in_gki-android12-5.10.patch 应用成功" || echo "⚠️ 50_add_susfs_in_gki-android12-5.10.patch 应用失败"
+              [[ -f "fix.patch" ]] && patch -p1 < fix.patch && echo "✅ fix.patch 应用成功" || echo "⚠️ fix.patch 应用失败" 
+              [[ -f "mksu_susfs.patch" ]] && patch -p1 < mksu_susfs.patch && echo "✅ mksu_susfs.patch 应用成功" || echo "⚠️ mksu_susfs.patch 应用失败"
+          }
+          cd ../..
+    
+          # 清理
+          rm -rf susfs_src susfs_patches
+          echo "✅ SUSFS 补丁应用完成"
+          
       - name: Apply LSM_BBG
         if: ${{ github.event.inputs.LSM == 'true' }}
         run: |
