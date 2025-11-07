@@ -22,7 +22,17 @@ on:
         description: "是否添加 SUSFS 支持？"
         required: true
         default: true
-
+      kernelsu_branch:
+        type: choice
+        description: "KernelSU版本（默认稳定版即不填，当版本大更新时需要自选旧版）"
+        required: true
+        default: ""
+        options:
+          -  v0.9.5
+          -  v1.0.5
+          -  v2.0.0
+          -  v2.1.0 
+          -  main
 jobs:
   build:
     name: ${{ github.event.inputs.LSM == 'true' && ' [LSM]' || '' }}For OnePlus_ACE2_KernelSU_${{ github.event.inputs.SUSFS == 'true' && ' [SUSFS]' || '' }}
@@ -67,8 +77,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name "Numbersf"
-          git config --global user.email "263623064@qq.com"
+          git config --global user.name "zhiyi0314"
+          git config --global user.email "1472096505@qq.com"
 
       - name: Install Dependencies + APTC
         uses: awalsh128/cache-apt-pkgs-action@latest 
@@ -224,7 +234,7 @@ jobs:
       - name: Add KernelSU
         run: |
           cd kernel_workspace/kernel_platform
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -main
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -${github.event.inputs.kernelsu_branch}
      
       
       - name: Add SUSFS Support with Patches
@@ -264,9 +274,6 @@ jobs:
               fi
           fi
           
-      - name: Apply Hide Stuff Patches
-        if: ${{ github.event.inputs.SUSFS == 'true' }}
-        run: |
           cd kernel_workspace/kernel_platform/common
           cp ../../SukiSU_patch/69_hide_stuff.patch ./
           echo "正在打隐藏应用补丁"
