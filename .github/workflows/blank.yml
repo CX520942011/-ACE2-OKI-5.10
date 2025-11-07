@@ -1,0 +1,58 @@
+# This is a basic workflow to help you get started with Actions
+
+name: TEST
+      - name: Download KernelSU Manager from Release
+        run: |
+          echo "正在从 KernelSU Release 下载管理器..."
+          
+          # 获取最新 Release 信息
+          RELEASE_JSON=$(curl -s "https://api.github.com/repos/tiann/KernelSU/releases/latest")
+          
+          # 查找包含 "manager" 且以 .apk 结尾的资源文件
+          MANAGER_DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("manager.*\\.apk$"; "i")) | .browser_download_url')
+          
+          if [ -z "$MANAGER_DOWNLOAD_URL" ] || [ "$MANAGER_DOWNLOAD_URL" = "null" ]; then
+            echo "❌ 未找到管理器 APK，尝试其他命名模式..."
+            # 尝试其他可能的命名模式
+            MANAGER_DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test(".*manager.*\\.apk$"; "i")) | .browser_download_url')
+          fi
+          
+          if [ -z "$MANAGER_DOWNLOAD_URL" ] || [ "$MANAGER_DOWNLOAD_URL" = "null" ]; then
+            echo "❌ 仍未找到管理器 APK，列出所有可用文件..."
+            # 列出所有资源文件以便调试
+            echo "$RELEASE_JSON" | jq -r '.assets[] | .name'
+            
+            # 最后尝试：下载第一个 APK 文件
+            MANAGER_DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' | head -n1)
+          fi
+          
+          if [ -n "$MANAGER_DOWNLOAD_URL" ] && [ "$MANAGER_DOWNLOAD_URL" != "null" ]; then
+            echo "找到管理器下载链接: $MANAGER_DOWNLOAD_URL"
+            wget -O manager.apk "$MANAGER_DOWNLOAD_URL"
+            echo "✅ 管理器下载成功"
+          else
+            echo "❌ 无法找到管理器下载链接，使用固定链接回退"
+            # 回退到可能的固定链接
+            wget -O manager.apk "https://github.com/tiann/KernelSU/releases/latest/download/ksu.md" || true
+            # 如果上面失败，尝试另一个可能的命名
+            wget -O manager.apk "https://github.com/tiann/KernelSU/releases/latest/download/KernelSU_manager.apk" || true
+          fi
+          
+          # 验证文件是否下载成功且是有效的 APK
+          if [ -f "manager.apk" ] && file manager.apk | grep -q "Zip archive"; then
+            echo "✅ 管理器 APK 文件验证成功"
+            ls -la manager.apk
+          else
+            echo "❌ 下载的文件不是有效的 APK，尝试直接搜索..."
+            # 最终尝试：使用更宽松的搜索条件
+            FINAL_URL=$(curl -s "https://api.github.com/repos/tiann/KernelSU/releases/latest" | \
+              jq -r '.assets[] | select(.name | ascii_downcase | contains("manager") and endswith(".apk")) | .browser_download_url' | head -n1)
+            
+            if [ -n "$FINAL_URL" ] && [ "$FINAL_URL" != "null" ]; then
+              echo "使用最终链接: $FINAL_URL"
+              wget -O manager.apk "$FINAL_URL"
+            else
+              echo "❌ 所有下载尝试都失败了"
+              exit 1
+            fi
+          fi
