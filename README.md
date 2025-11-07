@@ -7,4 +7,4 @@
 ### 致谢
 - Numbersf[https://github.com/Numbersf]
 - Bai[黄金猫猫头]
-
+## 注意：当上游更新仓库时，SUSFS可能没有同步上游，所以有时候会导致SUSFS不可用，请等待上游仓库更新
