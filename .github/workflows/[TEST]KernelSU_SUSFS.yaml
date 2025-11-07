@@ -26,7 +26,7 @@ on:
         type: choice
         description: "KernelSU版本（默认稳定版即不填，当版本大更新时需要自选旧版）"
         required: true
-        default: ""
+        default: " v1.0.5"
         options:
           -  v0.9.5
           -  v1.0.5
