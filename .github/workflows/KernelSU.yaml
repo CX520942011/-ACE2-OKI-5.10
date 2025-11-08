@@ -284,41 +284,11 @@ jobs:
             ./kernel_platform/oplus/build/oplus_build_kernel.sh waipio gki
           fi
 
-      - name: Download KernelSU Manager from Latest Successful Action
-        continue-on-error: true
-        run: |
-          ARTIFACT_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=success&event=workflow_dispatch" | \
-            jq -r '.workflow_runs[0] | .artifacts_url')
-          
-          if [ "$ARTIFACT_URL" != "null" ] && [ -n "$ARTIFACT_URL" ]; then
-            ARTIFACTS_JSON=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$ARTIFACT_URL")
-            MANAGER_DOWNLOAD_URL=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | select(.name | test("manager|Manager|KernelSU")) | .archive_download_url' | head -n1)
-            
-            if [ -n "$MANAGER_DOWNLOAD_URL" ] && [ "$MANAGER_DOWNLOAD_URL" != "null" ]; then
-              curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Accept: application/vnd.github.v3+json" \
-                -o manager.zip "$MANAGER_DOWNLOAD_URL"
-              
-              unzip -o manager.zip -d manager_temp/
-              
-              if find manager_temp/ -name "*.apk" | grep -q .; then
-                APK_FILE=$(find manager_temp/ -name "*.apk" | head -n1)
-                cp "$APK_FILE" ./manager.apk
-              fi
-              
-              rm -rf manager_temp/ manager.zip
-            fi
-          fi
 
       - name: Make AnyKernel3
         run: |
           git clone https://github.com/zhiyi0314/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
-          
-          if [ -f "./manager.apk" ]; then
-            cp ./manager.apk ./AnyKernel3/manager.apk
-          fi
           
           mkdir -p kernel_workspace/kernel_platform/out/Final-Image-Find/
           image_path=$(find "./kernel_workspace/kernel_platform/common/out/" -name "Image" | head -n 1)
