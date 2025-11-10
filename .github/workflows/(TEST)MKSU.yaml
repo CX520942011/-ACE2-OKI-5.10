@@ -234,7 +234,8 @@ jobs:
           cd kernel_workspace
 
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 --depth=1
-
+          git clone --depth=1 https://github.com/TheWildJames/kernel_patches.git
+          
           cd kernel_platform
           
           echo ">>> 覆盖 SUSFS fs 和头文件..."
@@ -246,6 +247,7 @@ jobs:
           cd common
           echo ">>> 应用 SUSFS 主补丁..."
           patch -p1 --forward < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch || true
+          pacth -p1 --forward < ../../kernel_patches/mksu/fix_core_hook.c.patch || true
           
           if grep -qxF $'\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
             echo "vma_pages Line found. Revert Fake Patching!"
