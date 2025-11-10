@@ -26,14 +26,9 @@ on:
         description: "是否启用内核层面阻止对关键分区/设备节点的非法写入(LSM)？"
         required: true
         default: true
-      SUSFS:
-        type: boolean
-        description: "是否添加 SUSFS 支持？"
-        required: true
-        default: true 
       SUSFS_VERSION:
         type: choice
-        description: "选择SUSFS版本（未勾选SUSFS不用管）"
+        description: "选择SUSFS版本"
         required: false
         default: "v1.5.12"
         options:
@@ -44,7 +39,7 @@ on:
           - "v1.5.12"
 jobs:
   build:
-    name: ${{ github.event.inputs.LSM == 'true' && ' [LSM]' || '' }}For OnePlus_ACE2_KernelSU_${{ github.event.inputs.SUSFS == 'true' && ' [SUSFS]' || '' }}
+    name: ${{ github.event.inputs.LSM && '[LSM] ' || '' }}OnePlus_ACE2_KernelSU_SUSFS
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -230,35 +225,84 @@ jobs:
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
           
-      - name: Apply SUSFS Patches (正确方式)
-        if: ${{ github.event.inputs.SUSFS == 'true' }}
+      - name: Apply SUSFS Patches 
         run: |
           cd kernel_workspace
-          # 拉 SUSFS 补丁仓库 (官方为 GKI Android12 5.10 分支, 与 ACE2 完全匹配)
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 --depth=1
 
-          cd kernel_platform/common
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 --depth=1
+          git clone --depth=1 https://github.com/TheWildJames/kernel_patches.git
+
+          cd kernel_platform
+          
+          echo ">>> 覆盖 SUSFS fs 和头文件..."
+          cp ../../susfs4ksu/kernel_patches/50_add_susfs_in_android12-5.10.patch ./common/
+          cp -r ../../susfs4ksu/kernel_patches/fs/* ./common/fs/
+          cp -r ../../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+
+          cd ./KernelSU-Next
+          susfs_version=$(grep '#define SUSFS_VERSION' ../common/include/linux/susfs.h | awk -F'"' '{print $2}')
+          echo "SUSVER=$susfs_version" >> $GITHUB_ENV
+          BASE_VERSION=10200
+          cd ./kernel
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" $BASE_VERSION)
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" Makefile
+          cd ..
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          echo "KernelSU Next Version: $KSU_VERSION"
+          SUSFS_VER="${{ github.event.inputs.SUSFS_VERSION }}"
 
           echo ">>> 应用 SUSFS 主补丁..."
           patch -p1 --forward < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch || true
-
-          echo ">>> 覆盖 SUSFS fs 和头文件..."
-          cp -r ../../susfs4ksu/kernel_patches/fs/* ./fs/
-          cp -r ../../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
-
           echo ">>> 根据选择版本补丁进行修复..."
           SUSFS_VER="${{ github.event.inputs.SUSFS_VERSION }}"
+          case "$susfs_version" in
+            "v1.5.5"|"v1.5.6"|"v1.5.7")
+              cp "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" "./ksun_susfs_latest.patch"
+              ;;
+            "v1.5.8")
+              cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch  || true
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+              ;;
+            "v1.5.9"|"v1.5.10"|"v1.5.11"|"v1.5.12")
+              cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
+              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
+                echo "Patching file: $file.c with fix_$file.c.patch"
+                patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
+              done
+              patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
+              ;;
+            *)
+              echo "::error::Unsupported SUSFS version: $susfs_version"
+              exit 1
+              ;;
+          esac
+          patch -p1 --forward < ksun_susfs_latest.patch || true
+          cd ../common
+          patch -p1 < 50_add_susfs_in_android12-5.10.patch
 
-          if [ -d "../../kernel_patches/next/susfs_fix_patches/${SUSFS_VER}" ]; then
-            cp -r ../../kernel_patches/next/susfs_fix_patches/${SUSFS_VER}/*.patch ./
-            for p in *.patch; do
-              [ -f "$p" ] && patch -p1 --forward --fuzz=3 < "$p" || true
-            done
-          else
-            echo ">>> 未找到该版本对应的修复补丁（可能不需要修复）"
+          if grep -qxF $'\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
+            echo "vma_pages Line found. Revert Fake Patching!"
+            sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
           fi
+            echo "✅ SUSFS 补丁应用完成"
 
-          echo "✅ SUSFS 补丁应用完成"
+      - name: Apply KSUN Hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Apply KSUN hooks"
+          cd "kernel_workspace/kernel_platform/common"
+          patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
+          echo "✅ KSUN hooks applied"
 
       - name: Apply LSM_BBG
         if: ${{ github.event.inputs.LSM == 'true' }}
@@ -376,7 +420,7 @@ jobs:
             cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
       - name: Download Latest SUSFS Module from CI
-        if: ${{ github.event.inputs.SUSFS_CI == 'CI' && github.event.inputs.SUSFS == 'true' }}
+        if: ${{ github.event.inputs.SUSFS_CI == 'CI'}}
         continue-on-error: true
         run: |
           LATEST_RUN_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -396,7 +440,7 @@ jobs:
           fi
 
       - name: Download Latest SUSFS Module from Release
-        if: ${{ github.event.inputs.SUSFS_CI == 'Release' && github.event.inputs.SUSFS == 'true' }}
+        if: ${{ github.event.inputs.SUSFS_CI == 'Release'}}
         continue-on-error: true
         run: |
           wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
@@ -405,5 +449,5 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: AK3_KSUN_OKI5.10${{ github.event.inputs.SUSFS == 'true' && '-SUSFS' || '' }}
+          name: AK3_KSUN_OKI5.10-SUSFS }}
           path: ./AnyKernel3/*
