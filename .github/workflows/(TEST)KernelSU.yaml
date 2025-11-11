@@ -243,7 +243,7 @@ jobs:
           cp -r ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp -r ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-          cp ../kernel_patches/wild/susfs_fix_patches/v1.5.9 ./KernelSU
+          
           
           cd common
           echo ">>> 应用 SUSFS 主补丁..."
