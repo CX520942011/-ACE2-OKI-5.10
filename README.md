@@ -1,11 +1,14 @@
 # 使用GitHub Action 构建一加ACE2内核（KernelSU,SukiSU,KernelSU NEXT）
 Forked by [Action by Numbersf](https://github.com/Numbersf/Action-Build) 
 ## 当前状态:
-- [ ] MKSU-SUSFS
 - [x] KSU
 - [x] MKSU
+- [ ] MKSU-SUSFS
 - [x] SukiSU-SUSFS
 - [x] KSUN-SUSFS
+## 可选功能:
+- [x] BBG防格机
+- [x] 自定义内核后缀
 
 ## 注意：
 - 只用于OKI5.10的构建，请不要问除（一加ACE2）以外其他机型的问题（不做隔空适配）
