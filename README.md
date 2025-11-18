@@ -2,8 +2,9 @@
 Forked by [Action by Numbersf](https://github.com/Numbersf/Action-Build) 
 ## 当前状态:
 - [x] KSU
+- [x] KSU-SUSFS
 - [x] MKSU
-- [ ] MKSU-SUSFS
+- [X] MKSU-SUSFS
 - [x] SukiSU-SUSFS
 - [x] KSUN-SUSFS
 ## 可选功能:
@@ -21,10 +22,7 @@ Forked by [Action by Numbersf](https://github.com/Numbersf/Action-Build)
 ### 当上游更新仓库时，SUSFS可能没有同步上游，所以有时候会导致SUSFS不可用，请等待上游仓库更新，或者使用旧版
 
 ### 请注意主页的更新日志！
-- KernelSU补丁依旧打不上，包括1.0.5（已破防）
 - 不要用Test（测试）版本action,编译出来也不能用susfs
-- 删除MKSU-SUSFS（补丁全都不生效，没招了）
-- 关于MKSU和KSU，一段时间内是不会添加SUSFS了
 - [哈基白的网盘coolapk@Frost_dog](https://www.123pan.com/s/u33Zjv-GTlWA)，更新日志在他的动态（他的内核添加了很多特性，极力推荐，上酷安为白白点个关注）
 ## 使用此仓库发布内核须知：
 - 所有带SUSFS的Action都可以自选SUSFS模块下载（SukiSU不需要）
