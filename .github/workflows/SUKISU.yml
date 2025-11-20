@@ -254,7 +254,7 @@ KSU_VERSION_API := $KSU_API_VERSION
 KSU_VERSION_FULL := $VERSION_FULL
 EOF
 )
-        awk -v def="$VERSION_DEFINITIONS" '
+        awk -v def="$VERSION_DEFINITIONS=$(cat <<'EOF'
           /REPO_OWNER :=/ {print; print def; inserted=1; next}
           1
           END {if (!inserted) print def}
